@@ -1,0 +1,89 @@
+name: Build and Release
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+env:
+  BUILD_COUNTER: ${{ github.run_number }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        java: [21]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: ${{ matrix.java }}
+          distribution: 'temurin'
+          cache: 'gradle'
+
+      - run: chmod +x ./gradlew
+
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
+          restore-keys: |
+            ${{ runner.os }}-gradle-
+
+      - run: ./gradlew build --parallel --no-daemon --stacktrace
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: build-output
+          path: |
+            build/libs/*.jar
+            build/reports/tests/test
+          retention-days: 0
+
+  release:
+    needs: build
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: build-output
+          path: build/libs/
+
+      - id: get_version
+        run: |
+          JAR_FILE=$(ls build/libs/*.jar | grep -v -e '-plain' -e '-javadoc' -e '-sources' | head -n 1)
+          BASE_VERSION=$(basename "$JAR_FILE" | sed 's/\.jar$//')
+          FULL_VERSION="${BASE_VERSION}+build.$BUILD_COUNTER"
+          echo "version=${FULL_VERSION}" >> $GITHUB_OUTPUT
+          echo "base_version=${BASE_VERSION}" >> $GITHUB_OUTPUT
+          echo "jar_file=${JAR_FILE}" >> $GITHUB_OUTPUT
+
+      - name: Create zip of source code
+        run: zip -r source-code.zip . -x '*.git*' '*.gradle*' '*.idea*' '*.DS_Store*'
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.get_version.outputs.version }}
+          name: build.${{ steps.get_version.outputs.version }}
+          body: "Automated release built by GitHub Actions"
+          files: |
+            ${{ steps.get_version.outputs.jar_file }}
+            source-code.zip
+          draft: false
+          prerelease: false
+          generate_release_notes: true

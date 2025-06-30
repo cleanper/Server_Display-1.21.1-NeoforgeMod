@@ -1,0 +1,42 @@
+创作者版权声明与使用条款
+Creator's Copyright Notice & Terms of Use
+
+版权所有 © [年份] [创作者姓名/公司名]
+All Rights Reserved © [2025.6.30] [YL/YALI]
+
+1. 权利保留
+1. Rights Reserved
+本作品（包括但不限于源代码、文档、设计、音频及任何相关材料）的所有权利均由创作者独家保留。未经创作者书面许可，任何个人或实体不得修改、分发、复制、反编译或用于衍生创作。
+All rights of this work (including but not limited to source code, documentation, designs, audio, and any related materials) are exclusively reserved by the creator. No individual or entity may modify, distribute, copy, decompile, or create derivative works without the creator's prior written permission.
+
+2. 禁止行为
+2. Prohibited Actions
+
+禁止任何形式的修改、分发或公开传播本文件。
+Modification, distribution, or public sharing of this file in any form is prohibited.
+
+禁止反编译后基于原始代码进行独立创作，仅允许提出优化建议或问题报告。
+Creating independent works based on decompiled code is prohibited; only optimization suggestions or issue reports are permitted.
+
+禁止移除或篡改本版权声明。
+Removing or altering this copyright notice is prohibited.
+
+3. 允许行为
+3. Permitted Actions
+
+可向创作者提交改进意见或问题反馈。
+Users may submit improvement suggestions or issue reports to the creator.
+
+可在原始文件未改动的前提下，内部使用或参考本作品。
+Internal use or reference of the unmodified original file is permitted.
+
+4. 法律责任
+4. Legal Liability
+违反本条款者将承担一切民事及刑事法律责任。创作者保留追究侵权者赔偿及禁令救济的权利。
+Violators will bear all civil and criminal liabilities. The creator reserves the right to seek compensation and injunctive relief against infringers.
+
+5. 其他
+5. Miscellaneous
+本条款解释权归创作者所有。若需特殊授权，请通过以下方式联系：
+The creator retains the final interpretation of these terms. For special authorization, please contact:
+邮箱/Email: [3488543346@qq.com]
