@@ -82,7 +82,6 @@ jobs:
       - name: Prepare release assets
         id: prepare_assets
         run: |
-          # Find the JAR file (it should be in the root of artifacts now)
           JAR_PATH=$(find artifacts -name '*.jar' -not -name '*-plain*' -not -name '*-javadoc*' -not -name '*-sources*' | head -n 1)
           
           if [ -z "$JAR_PATH" ]; then
@@ -97,7 +96,6 @@ jobs:
           mkdir -p release-assets/libs
           cp "$JAR_PATH" "release-assets/libs/$NEW_JAR_NAME"
           
-          # Copy test reports if they exist
           if [ -d "artifacts/test-reports" ]; then
             mkdir -p release-assets/test-reports
             cp -r artifacts/test-reports/* release-assets/test-reports/
@@ -112,16 +110,35 @@ jobs:
           mkdir -p release-assets
           zip -r release-assets/source-code.zip . -x '*.git*' 'build/*' '.gradle/*' '*.idea*' '*.DS_Store*' 'artifacts/*'
 
+      - name: Get version description
+        id: version_desc
+        run: |
+          CURRENT_VERSION="${{ steps.prepare_assets.outputs.version }}"
+          VERSION_NUMBER=$(echo "$CURRENT_VERSION" | cut -d'+' -f1)
+          BUILD_NUMBER=$(echo "$CURRENT_VERSION" | cut -d'+' -f2 | cut -d'.' -f3)
+          
+          DESCRIPTION_LINE=$(grep -n "^${VERSION_NUMBER}\+build\.${BUILD_NUMBER}" Version_Description.txt | cut -d: -f1)
+          if [ -n "$DESCRIPTION_LINE" ]; then
+            NEXT_LINE=$((DESCRIPTION_LINE + 1))
+            DESCRIPTION=$(sed -n "${DESCRIPTION_LINE},${NEXT_LINE}p" Version_Description.txt | tail -n +2)
+            echo "description=${DESCRIPTION}" >> $GITHUB_OUTPUT
+          else
+            echo "description=No description available for this version" >> $GITHUB_OUTPUT
+          fi
+
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.prepare_assets.outputs.version }}
           name: ${{ steps.prepare_assets.outputs.version }}
-          body: "Automated release built by GitHub Actions"
+          body: |
+            ${{ steps.version_desc.outputs.description }}
+            
+            Full Changelog: https://github.com/${{ github.repository }}/compare/v${{ env.PREVIOUS_VERSION }}...v${{ steps.prepare_assets.outputs.version }}
           files: |
             ${{ steps.prepare_assets.outputs.jar_file }}
             ${{ steps.prepare_assets.outputs.test_reports }}/*
             release-assets/source-code.zip
           draft: false
           prerelease: false
-          generate_release_notes: true
+          generate_release_notes: false
