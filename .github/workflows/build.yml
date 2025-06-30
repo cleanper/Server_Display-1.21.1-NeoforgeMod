@@ -26,7 +26,8 @@ jobs:
           distribution: 'temurin'
           cache: 'gradle'
 
-      - run: chmod +x ./gradlew
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
 
       - uses: actions/cache@v4
         with:
@@ -37,14 +38,26 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-gradle-
 
-      - run: ./gradlew build --parallel --no-daemon --stacktrace
+      - name: Build with Gradle
+        run: ./gradlew build --parallel --no-daemon --stacktrace
+
+      - name: Find and upload build artifacts
+        id: upload_artifacts
+        run: |
+          JAR_PATH=$(find build/libs -name '*.jar' -not -name '*-plain*' -not -name '*-javadoc*' -not -name '*-sources*' | head -n 1)
+          if [ -z "$JAR_PATH" ]; then
+            echo "::error::No valid JAR file found in build/libs"
+            exit 1
+          fi
+          echo "jar_path=$JAR_PATH" >> $GITHUB_OUTPUT
+        shell: bash
 
       - name: Upload build artifacts
         uses: actions/upload-artifact@v4
         with:
           name: build-output
           path: |
-            build/libs/*.jar
+            ${{ steps.upload_artifacts.outputs.jar_path }}
             build/reports/tests/test
           retention-days: 0
 
@@ -69,7 +82,8 @@ jobs:
       - name: Prepare release assets
         id: prepare_assets
         run: |
-          JAR_PATH=$(find artifacts -path '*/build/libs/*.jar' -not -name '*-plain*' -not -name '*-javadoc*' -not -name '*-sources*' | head -n 1)
+          # Find the JAR file (it should be in the root of artifacts now)
+          JAR_PATH=$(find artifacts -name '*.jar' -not -name '*-plain*' -not -name '*-javadoc*' -not -name '*-sources*' | head -n 1)
           
           if [ -z "$JAR_PATH" ]; then
             echo "::error::No valid JAR file found in artifacts"
@@ -81,17 +95,22 @@ jobs:
           NEW_JAR_NAME="${BASE_NAME}+build.${BUILD_COUNTER}.jar"
           
           mkdir -p release-assets/libs
-          
           cp "$JAR_PATH" "release-assets/libs/$NEW_JAR_NAME"
           
-          find artifacts -path '*/build/reports/tests/test' -exec cp -r {} release-assets/test-reports \; || true
+          # Copy test reports if they exist
+          if [ -d "artifacts/test-reports" ]; then
+            mkdir -p release-assets/test-reports
+            cp -r artifacts/test-reports/* release-assets/test-reports/
+          fi
           
           echo "version=${BASE_NAME}+build.${BUILD_COUNTER}" >> $GITHUB_OUTPUT
           echo "jar_file=release-assets/libs/${NEW_JAR_NAME}" >> $GITHUB_OUTPUT
           echo "test_reports=release-assets/test-reports" >> $GITHUB_OUTPUT
 
       - name: Create source code zip
-        run: zip -r release-assets/source-code.zip . -x '*.git*' 'build/*' '.gradle/*' '*.idea*' '*.DS_Store*'
+        run: |
+          mkdir -p release-assets
+          zip -r release-assets/source-code.zip . -x '*.git*' 'build/*' '.gradle/*' '*.idea*' '*.DS_Store*' 'artifacts/*'
 
       - name: Create release
         uses: softprops/action-gh-release@v2
