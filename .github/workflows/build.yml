@@ -69,11 +69,14 @@ jobs:
       - id: get_version
         run: |
           JAR_FILE=$(ls build/libs/*.jar | grep -v -e '-plain' -e '-javadoc' -e '-sources' | head -n 1)
-          BASE_VERSION=$(basename "$JAR_FILE" | sed 's/\.jar$//')
-          FULL_VERSION="${BASE_VERSION}+build.$BUILD_COUNTER"
+          BASE_NAME=$(basename "$JAR_FILE" .jar)
+          BASE_VERSION=$(echo "$BASE_NAME" | sed 's/-[0-9]*\.[0-9]*\.[0-9]*$//')
+          VERSION=$(echo "$BASE_NAME" | grep -o '[0-9]*\.[0-9]*\.[0-9]*$')
+          FULL_VERSION="${VERSION}+build.${BUILD_COUNTER}"
+          NEW_JAR_NAME="${BASE_VERSION}-${FULL_VERSION}.jar"
+          cp "$JAR_FILE" "build/libs/${NEW_JAR_NAME}"
           echo "version=${FULL_VERSION}" >> $GITHUB_OUTPUT
-          echo "base_version=${BASE_VERSION}" >> $GITHUB_OUTPUT
-          echo "jar_file=${JAR_FILE}" >> $GITHUB_OUTPUT
+          echo "jar_file=build/libs/${NEW_JAR_NAME}" >> $GITHUB_OUTPUT
 
       - name: Create zip of source code
         run: zip -r source-code.zip . -x '*.git*' '*.gradle*' '*.idea*' '*.DS_Store*'
@@ -81,7 +84,7 @@ jobs:
       - uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.get_version.outputs.version }}
-          name: build.${{ steps.get_version.outputs.version }}
+          name: ${{ steps.get_version.outputs.version }}
           body: "Automated release built by GitHub Actions"
           files: |
             ${{ steps.get_version.outputs.jar_file }}
