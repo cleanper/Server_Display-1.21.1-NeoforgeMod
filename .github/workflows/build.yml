@@ -114,17 +114,24 @@ jobs:
         id: version_desc
         run: |
           CURRENT_VERSION="${{ steps.prepare_assets.outputs.version }}"
-          VERSION_NUMBER=$(echo "$CURRENT_VERSION" | cut -d'+' -f1)
-          BUILD_NUMBER=$(echo "$CURRENT_VERSION" | cut -d'+' -f2 | cut -d'.' -f3)
+          VERSION_LINE=$(grep -n "^${CURRENT_VERSION}" Version_Description.txt | cut -d: -f1)
           
-          DESCRIPTION_LINE=$(grep -n "^${VERSION_NUMBER}\+build\.${BUILD_NUMBER}" Version_Description.txt | cut -d: -f1)
-          if [ -n "$DESCRIPTION_LINE" ]; then
-            NEXT_LINE=$((DESCRIPTION_LINE + 1))
-            DESCRIPTION=$(sed -n "${DESCRIPTION_LINE},${NEXT_LINE}p" Version_Description.txt | tail -n +2)
-            echo "description=${DESCRIPTION}" >> $GITHUB_OUTPUT
+          if [ -n "$VERSION_LINE" ]; then
+            DESCRIPTION=$(awk -v line="$VERSION_LINE" 'NR==line+1' Version_Description.txt)
+            if [ -z "$DESCRIPTION" ]; then
+              DESCRIPTION="No description available for this version"
+            fi
           else
-            echo "description=No description available for this version" >> $GITHUB_OUTPUT
+            DESCRIPTION="No version entry found in Version_Description.txt"
           fi
+          
+          echo "description=${DESCRIPTION}" >> $GITHUB_OUTPUT
+
+      - name: Get previous tag
+        id: previous_tag
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 --match "v*" "$(git rev-list --tags --skip=1 --max-count=1)" 2>/dev/null || echo "")
+          echo "previous_tag=${PREVIOUS_TAG}" >> $GITHUB_OUTPUT
 
       - name: Create release
         uses: softprops/action-gh-release@v2
@@ -134,7 +141,7 @@ jobs:
           body: |
             ${{ steps.version_desc.outputs.description }}
             
-            Full Changelog: https://github.com/${{ github.repository }}/compare/v${{ env.PREVIOUS_VERSION }}...v${{ steps.prepare_assets.outputs.version }}
+            Full Changelog: https://github.com/${{ github.repository }}/compare/${{ steps.previous_tag.outputs.previous_tag }}...v${{ steps.prepare_assets.outputs.version }}
           files: |
             ${{ steps.prepare_assets.outputs.jar_file }}
             ${{ steps.prepare_assets.outputs.test_reports }}/*
