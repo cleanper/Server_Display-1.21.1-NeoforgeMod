@@ -19,42 +19,50 @@ import java.io.File;
 import java.io.FileReader;
 import java.io.FileWriter;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 @Mod("server_display")
 public class ServerDisplay {
     private static final Logger LOGGER = LogManager.getLogger();
     private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
     private static Config config;
-    private static String playerCount;
-    private static String playerExp;
-    private static String typingText = "";
-    private static int typingIndex;
-    private static long lastTypingTime;
+    private static final AtomicReference<String> playerCount = new AtomicReference<>("0");
+    private static final AtomicReference<String> playerExp = new AtomicReference<>("0");
+    private static final AtomicReference<String> typingText = new AtomicReference<>("");
+    private static final AtomicInteger typingIndex = new AtomicInteger(0);
+    private static volatile long lastTypingTime;
+    private static final int TYPING_RESET_DELAY = 5000;
 
     public ServerDisplay() {
         NeoForge.EVENT_BUS.register(this);
-        config = new Config(new ModConfigSpec.Builder()).build();
         loadConfig();
         PingService.init();
     }
 
     private static void loadConfig() {
         File configDir = new File("config/server_display");
-        if (!configDir.exists() && !configDir.mkdirs()) {
-            LOGGER.error("Failed to create config directory");
-        }
-
-        File configFile = new File(configDir, "config.json");
-        if (configFile.exists()) {
-            try (FileReader reader = new FileReader(configFile)) {
-                JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
-                config = GSON.fromJson(json, Config.class);
-            } catch (IOException e) {
-                LOGGER.error("Failed to load config", e);
+        try {
+            if (!configDir.exists()) {
+                Files.createDirectories(configDir.toPath());
             }
-        } else {
-            config = new Config(new ModConfigSpec.Builder()).build();
-            saveConfig();
+
+            File configFile = new File(configDir, "config.json");
+            if (configFile.exists()) {
+                try (FileReader reader = new FileReader(configFile)) {
+                    JsonObject json = JsonParser.parseReader(reader).getAsJsonObject();
+                    config = GSON.fromJson(json, Config.class);
+                }
+            } else {
+                ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+                config = new Config(builder);
+                saveConfig();
+            }
+        } catch (IOException e) {
+            LOGGER.error("Failed to load/save config", e);
+            ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+            config = new Config(builder);
         }
     }
 
@@ -70,27 +78,38 @@ public class ServerDisplay {
     @SubscribeEvent
     public void onClientTick(ClientTickEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.level == null) return;
+        if (mc.level == null) {
+            playerCount.set("0");
+            playerExp.set("0");
+            return;
+        }
 
-        playerCount = String.valueOf(mc.level.players().size());
+        playerCount.set(String.valueOf(mc.level.players().size()));
 
         if (mc.player != null) {
-            playerExp = String.valueOf((int)(mc.player.experienceProgress * 100));
+            playerExp.set(String.valueOf((int)(mc.player.experienceProgress * 100)));
         }
 
         if (config.typingEffect && !config.description.isEmpty()) {
-            if (System.currentTimeMillis() - lastTypingTime > config.typingSpeed) {
-                if (typingIndex < config.description.length()) {
-                    typingText += config.description.charAt(typingIndex++);
-                    lastTypingTime = System.currentTimeMillis();
+            long currentTime = System.currentTimeMillis();
+            if (currentTime - lastTypingTime > config.typingSpeed) {
+                if (typingIndex.get() < config.description.length()) {
+                    typingText.updateAndGet(s -> s + config.description.charAt(typingIndex.getAndIncrement()));
+                    lastTypingTime = currentTime;
+                } else if (currentTime - lastTypingTime > TYPING_RESET_DELAY) {
+                    typingText.set("");
+                    typingIndex.set(0);
+                    lastTypingTime = currentTime;
                 }
             }
+        } else {
+            typingText.set(config.description);
         }
     }
 
     @SubscribeEvent
     public void onRenderGui(RenderGuiEvent.Post event) {
-        if (!config.enabled) return;
+        if (!config.enabled || Minecraft.getInstance().options.hideGui) return;
 
         GuiGraphics gui = event.getGuiGraphics();
         Minecraft mc = Minecraft.getInstance();
@@ -98,12 +117,20 @@ public class ServerDisplay {
         int height = mc.getWindow().getGuiScaledHeight();
 
         int boxWidth = 120;
-        int boxHeight = config.showDescription ? 160 : 120;
+        int boxHeight = calculateBoxHeight();
         int x = width - boxWidth - 10;
         int y = height / 2 - boxHeight / 2;
 
         renderBackground(gui, x, y, boxWidth, boxHeight);
         renderContent(gui, x, y, boxWidth);
+    }
+
+    private int calculateBoxHeight() {
+        int height = 80;
+        if (config.showTitle) height += 25;
+        if (config.showExp) height += 20;
+        if (config.showDescription) height += 40;
+        return height;
     }
 
     private void renderBackground(GuiGraphics gui, int x, int y, int w, int h) {
@@ -118,7 +145,7 @@ public class ServerDisplay {
         int textY = y + 10;
 
         if (config.showTitle) {
-            gui.drawString(mc.font, Component.literal(config.title), x + w/2 - mc.font.width(config.title)/2, textY, 0xFFFFFF);
+            gui.drawCenteredString(mc.font, Component.literal(config.title), x + w/2, textY, 0xFFFFFF);
             textY += 25;
         }
 
@@ -129,17 +156,17 @@ public class ServerDisplay {
         gui.drawString(mc.font, Component.literal("延迟: " + PingService.getLatency()), x+5, textY, 0xFFFFFF);
         textY += 20;
 
-        gui.drawString(mc.font, Component.literal("玩家: " + playerCount), x+5, textY, 0xFFFFFF);
+        gui.drawString(mc.font, Component.literal("玩家: " + playerCount.get()), x+5, textY, 0xFFFFFF);
         textY += 20;
 
         if (config.showExp) {
-            gui.drawString(mc.font, Component.literal("经验: " + playerExp + "%"), x+5, textY, 0xFFFFFF);
+            gui.drawString(mc.font, Component.literal("经验: " + playerExp.get() + "%"), x+5, textY, 0xFFFFFF);
             textY += 20;
         }
 
         if (config.showDescription && !config.description.isEmpty()) {
-            String desc = config.typingEffect ? typingText : config.description;
-            gui.drawString(mc.font, Component.literal(desc), x+5, textY, 0xFFFFFF);
+            String desc = config.typingEffect ? typingText.get() : config.description;
+            gui.renderTooltip(mc.font, mc.font.split(Component.literal(desc), w-10), x+5, textY);
         }
     }
 
@@ -164,10 +191,6 @@ public class ServerDisplay {
             description = builder.define("description", "欢迎来到服务器！").get();
             typingSpeed = builder.defineInRange("typingSpeed", 100, 50, 500).get();
             builder.pop();
-        }
-
-        public Config build() {
-            return this;
         }
     }
 }
