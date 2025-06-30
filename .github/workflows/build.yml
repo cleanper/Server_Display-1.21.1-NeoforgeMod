@@ -39,7 +39,8 @@ jobs:
 
       - run: ./gradlew build --parallel --no-daemon --stacktrace
 
-      - uses: actions/upload-artifact@v4
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: build-output
           path: |
@@ -59,37 +60,49 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/download-artifact@v4
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
         with:
           name: build-output
-          path: artifact-download
+          path: artifacts
 
-      - id: get_version
+      - name: Prepare release assets
+        id: prepare_assets
         run: |
-          cd artifact-download
-          JAR_FILE=$(ls build/libs/*.jar | grep -v -e '-plain' -e '-javadoc' -e '-sources' | head -n 1)
-          if [ ! -f "$JAR_FILE" ]; then
-            echo "Error: No valid JAR file found" >&2
+          JAR_PATH=$(find artifacts -path '*/build/libs/*.jar' -not -name '*-plain*' -not -name '*-javadoc*' -not -name '*-sources*' | head -n 1)
+          
+          if [ -z "$JAR_PATH" ]; then
+            echo "::error::No valid JAR file found in artifacts"
             exit 1
           fi
+          
+          JAR_FILE=$(basename "$JAR_PATH")
           BASE_NAME=$(basename "$JAR_FILE" .jar)
           NEW_JAR_NAME="${BASE_NAME}+build.${BUILD_COUNTER}.jar"
-          mkdir -p ../build/libs
-          cp "$JAR_FILE" "../build/libs/$NEW_JAR_NAME"
+          
+          mkdir -p release-assets/libs
+          
+          cp "$JAR_PATH" "release-assets/libs/$NEW_JAR_NAME"
+          
+          find artifacts -path '*/build/reports/tests/test' -exec cp -r {} release-assets/test-reports \; || true
+          
           echo "version=${BASE_NAME}+build.${BUILD_COUNTER}" >> $GITHUB_OUTPUT
-          echo "jar_file=build/libs/${NEW_JAR_NAME}" >> $GITHUB_OUTPUT
+          echo "jar_file=release-assets/libs/${NEW_JAR_NAME}" >> $GITHUB_OUTPUT
+          echo "test_reports=release-assets/test-reports" >> $GITHUB_OUTPUT
 
-      - name: Create zip of source code
-        run: zip -r source-code.zip . -x '*.git*' '*.gradle*' '*.idea*' '*.DS_Store*'
+      - name: Create source code zip
+        run: zip -r release-assets/source-code.zip . -x '*.git*' 'build/*' '.gradle/*' '*.idea*' '*.DS_Store*'
 
-      - uses: softprops/action-gh-release@v2
+      - name: Create release
+        uses: softprops/action-gh-release@v2
         with:
-          tag_name: v${{ steps.get_version.outputs.version }}
-          name: ${{ steps.get_version.outputs.version }}
+          tag_name: v${{ steps.prepare_assets.outputs.version }}
+          name: ${{ steps.prepare_assets.outputs.version }}
           body: "Automated release built by GitHub Actions"
           files: |
-            ${{ steps.get_version.outputs.jar_file }}
-            source-code.zip
+            ${{ steps.prepare_assets.outputs.jar_file }}
+            ${{ steps.prepare_assets.outputs.test_reports }}/*
+            release-assets/source-code.zip
           draft: false
           prerelease: false
           generate_release_notes: true
