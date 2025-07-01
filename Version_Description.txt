@@ -29,7 +29,7 @@ server_display-0.0.1+build.19
 更多版本描述（开心）(´▽`)
 
 server_display-0.0.1+build.20
-增加版本更新文件
+增加版本更新文件yexu
 
 server_display-0.0.1+build.21
 更新版本描述(*￣▽￣*)
@@ -38,7 +38,19 @@ server_display-0.0.1+build.22
 更新Ping
 
 server_display-0.0.1+build.23
-更新主文件
+更新主文件，修复模组崩溃
 
 server_display-0.0.1+build.24
+更新网站版本检测中的最新版本
+
+server_display-0.0.1+build.25
+更多版本描述
+
+server_display-0.0.1+build.26
+更新Ping
+
+server_display-0.0.1+build.27
+更新主文件，修复模组崩溃x2 {{{(>_<)}}}
+
+server_display-0.0.1+build.28
 更新网站版本检测中的最新版本
