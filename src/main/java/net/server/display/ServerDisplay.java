@@ -5,6 +5,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.fml.event.lifecycle.FMLClientSetupEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.client.event.RenderGuiEvent;
 import net.neoforged.neoforge.common.NeoForge;
@@ -37,6 +38,13 @@ public class ServerDisplay {
 
     public ServerDisplay() {
         NeoForge.EVENT_BUS.register(this);
+        ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
+        config = new Config(builder);
+        builder.build();
+    }
+
+    @SubscribeEvent
+    public void onClientSetup(FMLClientSetupEvent event) {
         loadConfig();
         PingService.init();
     }
@@ -55,14 +63,10 @@ public class ServerDisplay {
                     config = GSON.fromJson(json, Config.class);
                 }
             } else {
-                ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
-                config = new Config(builder);
                 saveConfig();
             }
         } catch (IOException e) {
             LOGGER.error("Failed to load/save config", e);
-            ModConfigSpec.Builder builder = new ModConfigSpec.Builder();
-            config = new Config(builder);
         }
     }
 
@@ -171,14 +175,14 @@ public class ServerDisplay {
     }
 
     public static class Config {
-        public final boolean enabled;
-        public final boolean showTitle;
-        public final boolean showExp;
-        public final boolean showDescription;
-        public final boolean typingEffect;
-        public final String title;
-        public final String description;
-        public final int typingSpeed;
+        public boolean enabled;
+        public boolean showTitle;
+        public boolean showExp;
+        public boolean showDescription;
+        public boolean typingEffect;
+        public String title;
+        public String description;
+        public int typingSpeed;
 
         public Config(ModConfigSpec.Builder builder) {
             builder.push("general");
